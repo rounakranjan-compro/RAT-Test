@@ -1,0 +1,24 @@
+# Rails
+rails_app/log/
+rails_app/tmp/
+rails_app/storage/
+rails_app/.env
+
+# Vue / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Playwright
+playwright/node_modules/
+playwright/playwright-report/
+playwright/.env
+
+# Artifacts
+shared/run_artifacts/
+shared/run_artifacts/tmp/
+shared/run_artifacts/runs/
+
+# OS
+.DS_Store
+

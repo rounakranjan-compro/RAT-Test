@@ -1,0 +1,13 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  name: MyString
+  raw_content: MyText
+  normalized_content: MyText
+  language: MyString
+
+two:
+  name: MyString
+  raw_content: MyText
+  normalized_content: MyText
+  language: MyString

@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://regression-automation-platform.onrender.com/api/:path*"
+    },
+    {
+      "source": "/auth/google_oauth2",
+      "destination": "https://regression-automation-platform.onrender.com/auth/google_oauth2"
+    },
+    {
+      "source": "/auth/google_oauth2/callback",
+      "destination": "https://regression-automation-platform.onrender.com/auth/google_oauth2/callback"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
