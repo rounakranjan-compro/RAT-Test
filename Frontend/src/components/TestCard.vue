@@ -73,7 +73,7 @@ const queuePosition = computed(() => {
                  bg-indigo-600/20 border border-indigo-500/30
                  px-2 py-0.5 text-xs text-indigo-300"
         >
-          <span class="break-all max-w-[80px]">{{ tag }}</span>
+          <span class="break-all max-w-[80px]">TAGS : {{ tag }}</span>
           <button
             type="button"
             class="ml-0.5 text-indigo-400 hover:text-white
