@@ -75,7 +75,7 @@ def build_test_data(test, last_run)
   {
     id:                 test.id,
     title:              test.title,
-    environment:        last_run&.environment || test.environment || 'QA',
+    environment:        test.environment || 'QA',
     status:             last_run&.status || "NEW",
     lastRun:            last_run&.finished_at,
     startedAt:          last_run&.created_at,
