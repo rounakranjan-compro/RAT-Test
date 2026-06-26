@@ -48,7 +48,7 @@ const queuePosition = computed(() => {
           <p class="animate-pulse" v-if="tests?.status == 'failed'">🔴</p>
           <p v-else-if="tests.status == 'passed'">🟢</p>
           <p v-else>🔘</p>
-          <p class="text-slate-500 text-xs font-semibold mt-1">{{ tests?.status }}</p>
+          <p class="text-slate-200 text-xs font-semibold mt-1">{{ tests?.status }}</p>
         </div>
 
         <div class="flex flex-col gap-3">
@@ -56,10 +56,10 @@ const queuePosition = computed(() => {
           <p class="text-xs font-normal">🌐 {{ tests?.environment }}</p>
         </div>
 
-        <p class="text-slate-500 text-xs font-semibold text-wrap" v-if="tests?.lastRun != null">
+        <p class="text-slate-200 text-xs font-semibold text-wrap" v-if="tests?.lastRun != null">
           {{ formatDateTime(new Date(tests.lastRun)) }}
         </p>
-        <p class="text-slate-500 text-xs font-semibold text-wrap" v-else>Never run</p>
+        <p class="text-slate-200 text-xs font-semibold text-wrap" v-else>Never run</p>
 
       </CardTitle>
     </CardHeader>
