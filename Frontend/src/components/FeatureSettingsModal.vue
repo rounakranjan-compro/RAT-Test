@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Settings, Play, Loader2 } from 'lucide-vue-next'
 import { useTestStore } from '@/stores/testStore'
 import { storeToRefs } from 'pinia'
 import axios from '@/plugins/axios'
@@ -141,22 +142,20 @@ function handleTagBackspace(testId) {
 }
 
 // Run all tests in feature
-const isRunning = ref(false)
 async function runAllTests() {
-  if (!feature.value) return
-  isRunning.value = true
+  if (!feature.value || isFeatureRunning.value) return
+
   try {
     await testStore.runFeature(feature.value.id, {
       environment: 'QA',
       runner_mode: 'headless',
       retries: 0
     })
+
     await testStore.refreshTestsFromBackend()
     await testStore.refreshFeaturesFromBackend()
   } catch (err) {
     console.error('Failed to run feature:', err)
-  } finally {
-    isRunning.value = false
   }
 }
 
@@ -168,22 +167,35 @@ const liveTests = computed(() => {
 })
 
 defineExpose({ show })
+
+const isFeatureRunning = computed(() => {
+  if (!feature.value) return false
+
+  return feature.value.tests.some(test => {
+    const liveTest = tests.value.find(t => t.id === test.id)
+
+    return ['running', 'queued'].includes(
+      liveTest?.status?.toLowerCase()
+    )
+  })
+})
 </script>
 
 <template>
   <Dialog v-model:open="open" @update:open="onOpenChange">
-    <DialogContent class="w-[95vw] max-w-4xl bg-slate-900 border-slate-700 text-white overflow-y-auto max-h-[90vh]">
+    <DialogContent class="w-[95vw] max-w-4xl bg-[#161b26] border-slate-800 text-white overflow-y-auto max-h-[90vh]">
       <DialogHeader>
         <DialogTitle class="text-white flex items-center gap-2">
-          ⚙️ Feature Settings — {{ feature?.name }}
+          <Settings class="w-5 h-5 text-slate-400" />
+          Feature Settings — {{ feature?.name }}
         </DialogTitle>
       </DialogHeader>
 
       <div class="mt-4 space-y-2">
 
-        <!-- Table header -->
-        <div class="grid grid-cols-4 gap-3 px-4 py-2 text-xs font-semibold uppercase
-                    text-slate-400 border-b border-slate-700 bg-slate-800 rounded-t-lg">
+        <!-- Table header (desktop only) -->
+        <div class="hidden md:grid grid-cols-4 gap-3 px-4 py-2 text-xs font-semibold uppercase
+                    text-slate-400 border-b border-slate-800 bg-[#1c2333] rounded-t-lg">
           <span>Test</span>
           <span>Environment</span>
           <span>Tags</span>
@@ -194,22 +206,23 @@ defineExpose({ show })
         <div
           v-for="test in liveTests"
           :key="test.id"
-          class="grid grid-cols-4 gap-3 px-4 py-3 items-start
-                 bg-slate-800 border-b border-slate-700
+          class="grid grid-cols-1 md:grid-cols-4 gap-3 px-4 py-3 items-start
+                 bg-[#1c2333] border-b border-slate-800
                  last:border-none rounded-lg"
         >
           <!-- Test name + status -->
           <div class="flex flex-col gap-1 pt-1">
+            <label class="md:hidden block text-xs font-semibold uppercase text-slate-400 mb-1">Test</label>
             <span class="text-white text-sm font-medium break-all leading-tight">
               {{ test.title?.split('_').slice(0, -1).join('_') || test.title }}
             </span>
             <span
               class="text-xs w-fit px-1.5 py-0.5 rounded mt-1"
               :class="{
-                'bg-emerald-600/20 text-emerald-400': test.status === 'passed',
-                'bg-red-600/20 text-red-400':         test.status === 'failed',
-                'bg-yellow-600/20 text-yellow-400':   test.status === 'running',
-                'bg-slate-600/20 text-slate-400':     !['passed','failed','running'].includes(test.status)
+                'bg-emerald-500/15 text-emerald-400': test.status === 'passed',
+                'bg-red-500/15 text-red-400':         test.status === 'failed',
+                'bg-amber-500/15 text-amber-400':     test.status === 'running',
+                'bg-slate-500/15 text-slate-400':     !['passed','failed','running'].includes(test.status)
               }"
             >
               {{ test.status?.toUpperCase() || 'NEW' }}
@@ -218,9 +231,10 @@ defineExpose({ show })
 
           <!-- Environment -->
           <div v-if="testConfigs[test.id]">
+            <label class="md:hidden block text-xs font-semibold uppercase text-slate-400 mb-1">Environment</label>
             <select
               v-model="testConfigs[test.id].environment"
-              class="w-full rounded-lg bg-slate-700 border border-slate-600
+              class="w-full rounded-lg bg-[#0d1117] border border-slate-700
                      px-2 py-1.5 text-sm text-white cursor-pointer"
               @change="patchTest(test.id, { environment: testConfigs[test.id].environment })"
             >
@@ -231,23 +245,24 @@ defineExpose({ show })
 
           <!-- Tags chip input -->
           <div v-if="testConfigs[test.id]">
+            <label class="md:hidden block text-xs font-semibold uppercase text-slate-400 mb-1">Tags</label>
             <div
-              class="min-h-[36px] w-full rounded-lg bg-slate-700 border border-slate-600
+              class="min-h-[36px] w-full rounded-lg bg-[#0d1117] border border-slate-700
                      px-2 py-1 flex flex-wrap gap-1 cursor-text
-                     focus-within:border-indigo-500 transition-colors"
+                     focus-within:border-slate-500 transition-colors"
               @click="$refs['tagInput_' + test.id]?.[0]?.focus()"
             >
               <span
                 v-for="(tag, index) in testConfigs[test.id].tags"
                 :key="index"
                 class="inline-flex items-center gap-0.5 rounded
-                       bg-indigo-600/30 border border-indigo-500/40
-                       px-1.5 py-0.5 text-xs text-indigo-200"
+                       bg-slate-700/40 border border-slate-600/40
+                       px-1.5 py-0.5 text-xs text-slate-300"
               >
-                <span class="break-all max-w-[60px]">{{ tag }}</span>
+                <span class="break-all max-w-[120px] md:max-w-[60px]">{{ tag }}</span>
                 <button
                   type="button"
-                  class="text-indigo-300 hover:text-white transition-colors leading-none"
+                  class="text-slate-400 hover:text-white transition-colors leading-none"
                   @click.stop="removeTag(test.id, index)"
                 >×</button>
               </span>
@@ -271,9 +286,10 @@ defineExpose({ show })
 
           <!-- Retries -->
           <div v-if="testConfigs[test.id]" class="flex flex-col gap-1">
+            <label class="md:hidden block text-xs font-semibold uppercase text-slate-400 mb-1">Retries</label>
             <select
               v-model.number="testConfigs[test.id].retries_on_failure"
-              class="w-full rounded-lg bg-slate-700 border border-slate-600
+              class="w-full rounded-lg bg-[#0d1117] border border-slate-700
                      px-2 py-1.5 text-sm text-white cursor-pointer"
               @change="saveRetries(test.id)"
             >
@@ -284,12 +300,12 @@ defineExpose({ show })
               v-if="savingStatus[test.id]"
               class="text-xs"
               :class="{
-                'text-yellow-400': savingStatus[test.id] === 'saving',
-                'text-green-400':  savingStatus[test.id] === 'saved',
-                'text-red-400':    savingStatus[test.id] === 'error'
+                'text-amber-400':   savingStatus[test.id] === 'saving',
+                'text-emerald-400': savingStatus[test.id] === 'saved',
+                'text-red-400':     savingStatus[test.id] === 'error'
               }"
             >
-              {{ savingStatus[test.id] === 'saving' ? 'Saving...' : savingStatus[test.id] === 'saved' ? '✓ Saved' : '✗ Error' }}
+              {{ savingStatus[test.id] === 'saving' ? 'Saving…' : savingStatus[test.id] === 'saved' ? 'Saved' : 'Error' }}
             </span>
           </div>
         </div>
@@ -300,15 +316,21 @@ defineExpose({ show })
         </div>
 
         <!-- Run All button -->
-        <div class="flex justify-end pt-3 border-t border-slate-700">
+        <div class="flex justify-stretch md:justify-end pt-3 border-t border-slate-800">
           <Button
-            :disabled="isRunning"
-            class="bg-green-600 hover:bg-green-700 text-white
-                   disabled:opacity-40 disabled:cursor-not-allowed px-6"
+            :disabled="isFeatureRunning"
+            class="inline-flex items-center justify-center gap-2 w-full md:w-auto bg-slate-100 hover:bg-white text-slate-900 font-medium
+                   disabled:opacity-40 disabled:cursor-not-allowed px-6 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none"
             @click="runAllTests"
           >
-            <span v-if="isRunning" class="animate-pulse">⏳ Running...</span>
-            <span v-else>▶ Run All Tests</span>
+            <template v-if="isFeatureRunning">
+              <Loader2 class="w-4 h-4 animate-spin" />
+              Running…
+            </template>
+            <template v-else>
+              <Play class="w-4 h-4" />
+              Run All Tests
+            </template>
           </Button>
         </div>
 
