@@ -23,6 +23,14 @@ import { ChevronDown, ChevronRight, Play, Trash2, History, Settings } from 'luci
 import Button from './ui/button/Button.vue'
 import FeatureSettingsModal from './FeatureSettingsModal.vue'
 
+const STATUS_COLORS = {
+  'passed': 'text-green-500',
+  'failed': 'text-red-500',
+  'running': 'text-yellow-500',
+  'queued': 'text-blue-400',
+  'default': 'text-slate-400'
+}
+
 const featureSettingsRef = ref(null)
 const testStore = useTestStore()
 const { tests, features, selectedTest, searchQuery } = storeToRefs(testStore)
@@ -122,15 +130,7 @@ const getStandaloneTests = () => {
   return filteredTests.value.filter(t => !featureTestIds.has(t.id))
 }
 
-const statusColor = (status) => {
-  switch (status) {
-    case 'passed':  return 'text-green-500'
-    case 'failed':  return 'text-red-500'
-    case 'running': return 'text-yellow-500'
-    case 'queued':  return 'text-blue-400'
-    default:        return 'text-slate-400'
-  }
-}
+const statusColor = (status) => STATUS_COLORS[status] || STATUS_COLORS.default
 </script>
 
 <template>
@@ -153,7 +153,6 @@ const statusColor = (status) => {
         <div class="pr-3 flex flex-col gap-2">
 
         <!-- Features -->
-<!-- Features -->
           <div v-for="feature in filteredFeatures" :key="feature.id">
             <!-- Feature Header -->
             <div
