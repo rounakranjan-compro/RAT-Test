@@ -35,7 +35,7 @@ onMounted(async () => {
     })
     if (res.ok) {
       user.value = await res.json()
-      startBackgroundPolling() // ← only starts when logged in
+      startBackgroundPolling() 
     }
   } catch {
     console.log('Not authenticated Sarthak')
@@ -50,11 +50,11 @@ onUnmounted(() => {
 
 function handleLogin(userData) {
   user.value = userData
-  startBackgroundPolling() // ← restart polling after login
+  startBackgroundPolling() 
 }
 
 async function handleSignout() {
-  stopBackgroundPolling() // ← stop polling on signout
+  stopBackgroundPolling() 
   await fetch(`${API}/api/v1/sign_out`, {
     method: 'DELETE',
     credentials: 'include'
@@ -64,20 +64,16 @@ async function handleSignout() {
 </script>
 
 <template>
-  <!-- Let router handle /auth/callback -->
   <RouterView v-if="route.path === '/auth/callback'" />
 
-  <!-- Loading -->
   <div v-else-if="loading" class="min-h-screen flex items-center justify-center bg-[#0b0d12]">
     <p class="text-sm text-muted-foreground animate-pulse">Loading…</p>
   </div>
 
-  <!-- Unauthenticated -->
   <div v-else-if="!user" class="min-h-screen flex items-center justify-center bg-[#0b0d12]">
     <LoginDashboard @login-success="handleLogin" />
   </div>
 
-  <!-- Authenticated -->
   <template v-else>
     <header>
       <Navbar :user="user" @signout="handleSignout" />
