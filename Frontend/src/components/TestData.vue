@@ -7,7 +7,7 @@
         ENVIRONMENT
       </label>
       <select
-        class="w-full rounded-lg bg-background px-3 py-2 text-sm"
+        class="w-full rounded-lg bg-background px-8 py-2 text-sm"
         :value="environment"
         @change="emit('update:environment', $event.target.value)"
       >
@@ -58,7 +58,7 @@
           @keydown.backspace="handleBackspace"
         />
         
-        <span v-else class="text-xs text-slate-500 py-0.5 px-1 self-center">
+        <span v-else class="text-xs text-slate-800 py-0.5 px-1 self-center">
           Max 10 tags
         </span>
       </div>
