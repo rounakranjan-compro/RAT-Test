@@ -111,7 +111,7 @@ const runInfo = computed(() => {
 </script>
 
 <template>
-  <div v-if="error" class="rounded-xl border border-red-600/40 bg-red-900/20 px-6 py-5 text-red-300">
+  <div v-if="error" class="rounded-xl border border-red-600/40 bg-red-900/20 px-6 py-5 text-red-500">
     {{ error }}
   </div>
 
@@ -136,7 +136,7 @@ const runInfo = computed(() => {
         <h3 class="text-lg font-semibold text-white">
           {{ statusText }}
         </h3>
-        <p class="text-sm text-slate-400">
+        <p class="text-sm text-slate-500">
           {{ runInfo }}
         </p>
       </div>
