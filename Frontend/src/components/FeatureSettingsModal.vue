@@ -21,15 +21,27 @@ const feature = ref(null)
 const testConfigs = ref({})
 const savingStatus = ref({}) // track saving state per test
 
+// ---- new: search / sort state ----
+const searchQuery = ref('')
+const sortFailedFirst = ref(false)
+
+// ---- new: bulk-apply state ----
+const bulkEnvironment = ref('QA')
+const bulkRetries = ref(2)
+
+const DEFAULT_ENV = 'QA'
+const DEFAULT_RETRIES = 2
+const MAX_TAG_LENGTH = 30
+
 const initConfigs = () => {
   if (!feature.value) return
   const configs = {}
   feature.value.tests.forEach(t => {
     const liveTest = tests.value.find(lt => lt.id === t.id) || t
     configs[t.id] = {
-      environment:        liveTest.environment || 'QA',
+      environment:        liveTest.environment || DEFAULT_ENV,
       tags:               Array.isArray(liveTest.tags) ? [...liveTest.tags] : [],
-      retries_on_failure: liveTest.retries_on_failure ?? 2,
+      retries_on_failure: liveTest.retries_on_failure ?? DEFAULT_RETRIES,
       tagInput:           ''
     }
   })
@@ -39,6 +51,8 @@ const initConfigs = () => {
 const show = async (featureData) => {
   feature.value = featureData
   open.value = true
+  searchQuery.value = ''
+  sortFailedFirst.value = false
   // Fetch fresh data first
   await testStore.refreshTestsFromBackend()
   // Init after fresh data
@@ -50,6 +64,7 @@ const close = () => {
   feature.value = null
   testConfigs.value = {}
   savingStatus.value = {}
+  searchQuery.value = ''
 }
 
 const onOpenChange = (val) => {
@@ -112,7 +127,7 @@ async function saveTags(testId) {
 function addTag(testId) {
   const config = testConfigs.value[testId]
   if (!config) return
-  const val = config.tagInput.trim()
+  const val = config.tagInput.trim().slice(0, MAX_TAG_LENGTH)
   if (!val) return
   if (config.tags.length >= 10) return
   if (config.tags.includes(val)) {
@@ -140,6 +155,49 @@ function handleTagBackspace(testId) {
   }
 }
 
+// ---- new: copy one test's tags onto every other test in the feature ----
+function copyTagsToAll(sourceTestId) {
+  const source = testConfigs.value[sourceTestId]
+  if (!source) return
+  Object.keys(testConfigs.value).forEach(testId => {
+    if (testId === String(sourceTestId)) return
+    testConfigs.value[testId].tags = [...source.tags]
+    saveTags(testId)
+  })
+}
+
+// ---- new: reset a single test's config back to defaults ----
+function resetTestConfig(testId) {
+  const config = testConfigs.value[testId]
+  if (!config) return
+  config.environment = DEFAULT_ENV
+  config.retries_on_failure = DEFAULT_RETRIES
+  config.tags = []
+  config.tagInput = ''
+  patchTest(testId, {
+    environment: DEFAULT_ENV,
+    retries_on_failure: DEFAULT_RETRIES,
+    tags: []
+  })
+}
+
+// ---- new: bulk apply environment/retries across every test ----
+async function applyEnvironmentToAll() {
+  const ids = Object.keys(testConfigs.value)
+  for (const testId of ids) {
+    testConfigs.value[testId].environment = bulkEnvironment.value
+    await patchTest(testId, { environment: bulkEnvironment.value })
+  }
+}
+
+async function applyRetriesToAll() {
+  const ids = Object.keys(testConfigs.value)
+  for (const testId of ids) {
+    testConfigs.value[testId].retries_on_failure = bulkRetries.value
+    await saveRetries(testId)
+  }
+}
+
 // Run all tests in feature
 const isRunning = ref(false)
 async function runAllTests() {
@@ -160,12 +218,76 @@ async function runAllTests() {
   }
 }
 
+// ---- new: run only the currently failed tests in this feature ----
+const isRunningFailed = ref(false)
+async function runFailedTests() {
+  if (!feature.value) return
+  const failedIds = liveTests.value
+    .filter(t => t.status === 'failed')
+    .map(t => t.id)
+  if (!failedIds.length) return
+
+  isRunningFailed.value = true
+  try {
+    // Assumes runFeature can be scoped to specific tests via test_ids.
+    // Falls back to a full feature run if the store method ignores the option.
+    await testStore.runFeature(feature.value.id, {
+      environment: 'QA',
+      runner_mode: 'headless',
+      retries: 0,
+      test_ids: failedIds
+    })
+    await testStore.refreshTestsFromBackend()
+    await testStore.refreshFeaturesFromBackend()
+  } catch (err) {
+    console.error('Failed to run failed tests:', err)
+  } finally {
+    isRunningFailed.value = false
+  }
+}
+
 const liveTests = computed(() => {
   if (!feature.value) return []
   return feature.value.tests.map(t =>
     tests.value.find(lt => lt.id === t.id) || t
   )
 })
+
+// ---- new: search + sort applied on top of liveTests ----
+const displayedTests = computed(() => {
+  let result = liveTests.value
+
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    result = result.filter(t =>
+      (t.title || '').toLowerCase().includes(q) ||
+      (testConfigs.value[t.id]?.tags || []).some(tag => tag.toLowerCase().includes(q))
+    )
+  }
+
+  if (sortFailedFirst.value) {
+    const rank = { failed: 0, running: 1, passed: 2 }
+    result = [...result].sort((a, b) => {
+      const ra = rank[a.status] ?? 3
+      const rb = rank[b.status] ?? 3
+      return ra - rb
+    })
+  }
+
+  return result
+})
+
+// ---- new: quick status summary for the header ----
+const statusCounts = computed(() => {
+  const counts = { passed: 0, failed: 0, running: 0, other: 0 }
+  liveTests.value.forEach(t => {
+    if (counts[t.status] !== undefined) counts[t.status]++
+    else counts.other++
+  })
+  return counts
+})
+
+const hasFailedTests = computed(() => statusCounts.value.failed > 0)
 
 defineExpose({ show })
 </script>
@@ -179,22 +301,86 @@ defineExpose({ show })
         </DialogTitle>
       </DialogHeader>
 
+      <!-- Status summary -->
+      <div class="flex items-center gap-3 text-xs text-slate-400 mt-2">
+        <span class="text-emerald-400">{{ statusCounts.passed }} passed</span>
+        <span class="text-red-400">{{ statusCounts.failed }} failed</span>
+        <span class="text-yellow-400">{{ statusCounts.running }} running</span>
+        <span class="text-slate-500">{{ statusCounts.other }} new</span>
+      </div>
+
+      <!-- Toolbar: search, sort, bulk apply -->
+      <div class="mt-3 flex flex-wrap items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-lg p-2">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search tests or tags..."
+          class="flex-1 min-w-[160px] rounded-lg bg-slate-700 border border-slate-600
+                 px-2 py-1.5 text-sm text-white placeholder:text-slate-500 outline-none"
+        />
+
+        <button
+          type="button"
+          class="text-xs px-2 py-1.5 rounded-lg border transition-colors"
+          :class="sortFailedFirst
+            ? 'bg-indigo-600/30 border-indigo-500/40 text-indigo-200'
+            : 'bg-slate-700 border-slate-600 text-slate-300'"
+          @click="sortFailedFirst = !sortFailedFirst"
+        >
+          Failed first
+        </button>
+
+        <div class="flex items-center gap-1">
+          <select
+            v-model="bulkEnvironment"
+            class="rounded-lg bg-slate-700 border border-slate-600 px-2 py-1.5 text-xs text-white cursor-pointer"
+          >
+            <option value="QA">QA</option>
+            <option value="DEV">DEV</option>
+          </select>
+          <button
+            type="button"
+            class="text-xs px-2 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:text-white"
+            @click="applyEnvironmentToAll"
+          >
+            Apply env to all
+          </button>
+        </div>
+
+        <div class="flex items-center gap-1">
+          <select
+            v-model.number="bulkRetries"
+            class="rounded-lg bg-slate-700 border border-slate-600 px-2 py-1.5 text-xs text-white cursor-pointer"
+          >
+            <option v-for="n in 5" :key="n" :value="n - 1">{{ n - 1 }} retries</option>
+          </select>
+          <button
+            type="button"
+            class="text-xs px-2 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:text-white"
+            @click="applyRetriesToAll"
+          >
+            Apply to all
+          </button>
+        </div>
+      </div>
+
       <div class="mt-4 space-y-2">
 
         <!-- Table header -->
-        <div class="grid grid-cols-4 gap-3 px-4 py-2 text-xs font-semibold uppercase
+        <div class="grid grid-cols-5 gap-3 px-4 py-2 text-xs font-semibold uppercase
                     text-slate-400 border-b border-slate-700 bg-slate-800 rounded-t-lg">
           <span>Test</span>
           <span>Environment</span>
           <span>Tags</span>
           <span>Retries</span>
+          <span>Actions</span>
         </div>
 
         <!-- Test rows -->
         <div
-          v-for="test in liveTests"
+          v-for="test in displayedTests"
           :key="test.id"
-          class="grid grid-cols-4 gap-3 px-4 py-3 items-start
+          class="grid grid-cols-5 gap-3 px-4 py-3 items-start
                  bg-slate-800 border-b border-slate-700
                  last:border-none rounded-lg"
         >
@@ -258,6 +444,7 @@ defineExpose({ show })
                 v-model="testConfigs[test.id].tagInput"
                 type="text"
                 placeholder="Add..."
+                maxlength="30"
                 class="flex-1 min-w-[50px] bg-transparent text-xs text-white
                        placeholder:text-slate-500 outline-none border-none
                        focus:ring-0 py-0.5"
@@ -266,7 +453,17 @@ defineExpose({ show })
               />
               <span v-else class="text-xs text-slate-500 self-center">Max</span>
             </div>
-            <p class="text-xs text-slate-600 mt-0.5">↵ Enter to add</p>
+            <div class="flex items-center justify-between mt-0.5">
+              <p class="text-xs text-slate-600">↵ Enter to add</p>
+              <button
+                v-if="testConfigs[test.id].tags.length"
+                type="button"
+                class="text-xs text-slate-500 hover:text-indigo-300"
+                @click="copyTagsToAll(test.id)"
+              >
+                Copy to all
+              </button>
+            </div>
           </div>
 
           <!-- Retries -->
@@ -292,15 +489,42 @@ defineExpose({ show })
               {{ savingStatus[test.id] === 'saving' ? 'Saving...' : savingStatus[test.id] === 'saved' ? '✓ Saved' : '✗ Error' }}
             </span>
           </div>
+
+          <!-- Actions -->
+          <div v-if="testConfigs[test.id]" class="pt-1">
+            <button
+              type="button"
+              class="text-xs px-2 py-1 rounded-lg bg-slate-700 border border-slate-600
+                     text-slate-300 hover:text-white hover:border-slate-500"
+              @click="resetTestConfig(test.id)"
+            >
+              Reset
+            </button>
+          </div>
         </div>
 
         <!-- Empty state -->
-        <div v-if="!liveTests.length" class="text-center py-6 text-slate-500 text-sm">
+        <div v-if="!displayedTests.length && liveTests.length" class="text-center py-6 text-slate-500 text-sm">
+          No tests match "{{ searchQuery }}".
+        </div>
+        <div v-else-if="!liveTests.length" class="text-center py-6 text-slate-500 text-sm">
           No tests in this feature yet.
         </div>
 
-        <!-- Run All button -->
-        <div class="flex justify-end pt-3 border-t border-slate-700">
+        <!-- Run actions -->
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-700">
+          <Button
+            v-if="hasFailedTests"
+            :disabled="isRunningFailed"
+            variant="outline"
+            class="border-red-500/40 text-red-300 hover:bg-red-600/10
+                   disabled:opacity-40 disabled:cursor-not-allowed px-4"
+            @click="runFailedTests"
+          >
+            <span v-if="isRunningFailed" class="animate-pulse">⏳ Running...</span>
+            <span v-else>↻ Run Failed Only ({{ statusCounts.failed }})</span>
+          </Button>
+
           <Button
             :disabled="isRunning"
             class="bg-green-600 hover:bg-green-700 text-white
